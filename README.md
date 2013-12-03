@@ -2,5 +2,4 @@
 
 # Instructions
 
-    make data # generate test data
-    make # run simulation
+To run, type `make`. To modify simulation parameters you need to edit `python/simulation.py`.
