@@ -7,11 +7,16 @@ from operator import itemgetter
 MIN_P = 0.001
 MAX_P = 0.999
 
+# TODO: Figure out how to do N-fold cross-validation
+# TODO: More data
+# TODO: Figure out why max_null_cost_metric turns other chars into '0'. Doesn't actually affect params though!
+
 def main():
     viterbi_c_path = sys.argv[1]
     data_path = sys.argv[2]
-    
-    # TODO: Figure out how to do N-fold cross-validation
+    # Two different cost functions
+    cost_function = max_null_cost_metric
+    # cost_function = levenshtein
     
     # Load the data file
     # format: received data, true transmitted data (at origin)
@@ -25,7 +30,13 @@ def main():
             ('XXXXXXXAAXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXBXXXBXXXXXXXXXXX',
              'XXXXXXXAAAAAXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXBBBBBBXXXXXXXXX'),
             ('XXXXXXXXXXXXXXXXCXXCCXXCXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
-             'XXXXXXXXXXXXXXXXCCCCCCCCCCCXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'),
+             'XXXXXXXXXXXXXXXXCCCCCCCCCCCXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'),             
+            ('XXXXXXXXXXAXXXXAXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+            'XXXXXXXXXXAAAAAAXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'),
+            ('XXXXXXXXXXXXXXXXXXXXXXXXXBXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+            'XXXXXXXXXXXXXXXXXXXXXXXXBBBXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'),
+            ('XXXXXXCXCXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXAXXXXXXXXXXXX',
+            'XXXXXXXCCCCCXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXAAXXXXXXXXXXXXX'),
             # null case
             ('XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
              'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX')
@@ -53,7 +64,7 @@ def main():
     total_cost_old = 100000000000000
     temp = 1.0
     temp_decrement = 0.01
-    iter_max = 100
+    iter_max = 200
     iters = 0
     while True:
         print "Temp =", temp
@@ -71,7 +82,7 @@ def main():
         
         
         # Run against all test data and compute cost
-        total_cost = run_viterbi(viterbi_c_path, data, probs)
+        total_cost = run_viterbi(viterbi_c_path, data, probs, cost_function)
         print "\ttotal_cost =", total_cost, "vs old_cost =", total_cost_old
         
         # Do we keep old_p?
@@ -89,7 +100,7 @@ def main():
         if temp <= 0 or iters > iter_max: break
         
     # Run simulation and print out
-    run_viterbi(viterbi_c_path, data, probs, True)
+    run_viterbi(viterbi_c_path, data, probs, cost_function, True)
     
     # Print probabilities
     print ''
@@ -99,7 +110,7 @@ def main():
     sorted_probs = sorted(probs.iteritems(), key=lambda (k,v): itemgetter(1)(k))
     print_tuples(sorted_probs)
     
-def run_viterbi(viterbi_c_path, data, probs, debug=False):
+def run_viterbi(viterbi_c_path, data, probs, cost_function, debug=False):
     total_cost = 0
     for (test, gold) in data:
         # NOTE: We use log-probabilities to avoid underflow
@@ -120,7 +131,7 @@ def run_viterbi(viterbi_c_path, data, probs, debug=False):
                 str(log(probs['transition_signal_to_other_signal']))
                 ]
         output = subprocess.check_output(args) # the reconstructed data (viterbi)
-        total_cost += levenshtein(output, gold)
+        total_cost += cost_function(output, gold)
         if debug: print output, gold
     return total_cost
 
@@ -144,24 +155,48 @@ def levenshtein(s1, s2):
         previous_row = current_row
 
     return previous_row[-1]
+    
+def max_null_cost_metric(s1, s2):
+    # Assign a massive cost to getting a null char instead of true char
+    
+    # get histogram of chars for each str
+    # see http://stackoverflow.com/questions/8952101/best-way-to-count-char-occurences-in-a-string
+    s1_chars = dict((c, s1.count(c)) for c in s1)
+    s2_chars = dict((c, s2.count(c)) for c in s2)
+    
+    # compare counts - create a dictionary of the counts of s1 - s2
+    common_chars = {};
+    for c in s1_chars: common_chars[c] = s1_chars[c]
+    for c in s2_chars:
+        if c in common_chars:
+            common_chars[c] -= s2_chars[c]
+        else:
+            common_chars[c] = -1 * s2_chars[c]
+          
+    # Assign more value to null char
+    for c in common_chars:
+        if c == 'X': common_chars[c] *= 10
+    
+    print 'sum()=', sum(common_chars.values())
+    return abs(sum(common_chars.values()))
 
-    def print_tuples(tuples, padding = 3):
-        # Assume tuples are all the same length!!!
-        # Get max length of each index
-        length = len(tuples[0])
-        max_length = [0] * length
-        for i in range(0, length):
-            for t in tuples:
-                if len(str(t[i])) > max_length[i]:
-                    max_length[i] = len(str(t[i]))
-
-        # Print out each element with padding + difference of max_length and length of item
+def print_tuples(tuples, padding = 3):
+    # Assume tuples are all the same length!!!
+    # Get max length of each index
+    length = len(tuples[0])
+    max_length = [0] * length
+    for i in range(0, length):
         for t in tuples:
-            buf = ''
-            for i in range(0, length):
-                buf += str(t[i])
-                for j in range(0, max_length[i] + padding - len(str(t[i]))):
-                    buf += ' '
-            print buf
+            if len(str(t[i])) > max_length[i]:
+                max_length[i] = len(str(t[i]))
+
+    # Print out each element with padding + difference of max_length and length of item
+    for t in tuples:
+        buf = ''
+        for i in range(0, length):
+            buf += str(t[i])
+            for j in range(0, max_length[i] + padding - len(str(t[i]))):
+                buf += ' '
+        print buf
 
 if __name__ == "__main__": main()
