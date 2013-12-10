@@ -2,9 +2,7 @@
 
 import sys, subprocess, math, random
 from math import log, exp
-# TODO:
-# - Figure out similarity score for cost(test, gold)
-# - Set up simulated annealing simulation for probabilities
+from operator import itemgetter
 
 MIN_P = 0.001
 MAX_P = 0.999
@@ -12,6 +10,8 @@ MAX_P = 0.999
 def main():
     viterbi_c_path = sys.argv[1]
     data_path = sys.argv[2]
+    
+    # TODO: Figure out how to do N-fold cross-validation
     
     # Load the data file
     # format: received data, true transmitted data (at origin)
@@ -91,6 +91,14 @@ def main():
     # Run simulation and print out
     run_viterbi(viterbi_c_path, data, probs, True)
     
+    # Print probabilities
+    print ''
+    print '---------------------------------------'
+    print '        Optimized Probabilities        '
+    print '---------------------------------------'
+    sorted_probs = sorted(probs.iteritems(), key=lambda (k,v): itemgetter(1)(k))
+    print_tuples(sorted_probs)
+    
 def run_viterbi(viterbi_c_path, data, probs, debug=False):
     total_cost = 0
     for (test, gold) in data:
@@ -136,5 +144,24 @@ def levenshtein(s1, s2):
         previous_row = current_row
 
     return previous_row[-1]
+
+    def print_tuples(tuples, padding = 3):
+        # Assume tuples are all the same length!!!
+        # Get max length of each index
+        length = len(tuples[0])
+        max_length = [0] * length
+        for i in range(0, length):
+            for t in tuples:
+                if len(str(t[i])) > max_length[i]:
+                    max_length[i] = len(str(t[i]))
+
+        # Print out each element with padding + difference of max_length and length of item
+        for t in tuples:
+            buf = ''
+            for i in range(0, length):
+                buf += str(t[i])
+                for j in range(0, max_length[i] + padding - len(str(t[i]))):
+                    buf += ' '
+            print buf
 
 if __name__ == "__main__": main()
